@@ -273,7 +273,8 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         # Collect dag nodes
         #
-        nodes = [self.layerItemModel.nodeFromIndex(index) for index in selected.indexes() if index.column() == 0]
+        indexes = [self.layerItemFilterModel.mapToSource(index) for index in selected.indexes() if index.column() == 0]
+        nodes = list(map(self.layerItemModel.nodeFromIndex, indexes))
         selectionList = dagutils.createSelectionList(nodes)
 
         # Evaluate keyboard modifiers
