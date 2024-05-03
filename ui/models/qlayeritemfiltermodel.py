@@ -47,7 +47,9 @@ class QLayerItemFilterModel(QtCore.QSortFilterProxyModel):
 
             model = self.sourceModel()  # type: qlayeritemmodel.QLayerItemModel
             index = model.index(row, 0, parent=parent)
-            name = index.data(role=QtCore.Qt.DisplayRole)
+            text = index.data(role=QtCore.Qt.DisplayRole)
+
+            name = text if text is not None else ''
 
             if name.endswith('defaultLayer'):
 

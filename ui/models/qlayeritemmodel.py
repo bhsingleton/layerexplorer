@@ -196,9 +196,9 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
             identificationPlug = plugutils.findPlug(node, 'identification')
             sourcePlug = identificationPlug.source()
             arrayPlug = sourcePlug.array()
-            indices = arrayPlug.getExistingArrayAttributeIndices()  # type: om.MIntArray
-            logicalIndex = sourcePlug.logicalIndex()
-            row = tuple(indices).index(logicalIndex)
+            connectionCount = arrayPlug.numConnectedElements()
+            elements = [arrayPlug.connectionByPhysicalIndex(i) for i in range(connectionCount)]
+            row = elements.index(sourcePlug)
 
             hashCode = om.MObjectHandle(node).hashCode()
 
@@ -263,9 +263,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
                 # Check if row is in range
                 #
                 plug = plugutils.findPlug(node, 'displayLayerId')
-
-                indices = plug.getExistingArrayAttributeIndices()
-                maxRow = len(indices)
+                maxRow = plug.numConnectedElements()
 
                 if not (0 <= row < maxRow):
 
@@ -273,7 +271,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
                 # Check if plug element is valid
                 #
-                element = plug.elementByPhysicalIndex(row)
+                element = plug.connectionByPhysicalIndex(row)
 
                 destinations = element.destinations()
                 numDestinations = len(destinations)
@@ -281,7 +279,6 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
                 if numDestinations == 1:
 
                     destination = destinations[0]
-
                     childNode = destination.node()
                     childHandle = om.MObjectHandle(childNode)
                     hashCode = childHandle.hashCode()
@@ -305,7 +302,6 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
                 if 0 <= row < maxRow:
 
                     destination = destinations[row]
-
                     childNode = destination.node()
                     childHandle = om.MObjectHandle(childNode)
                     hashCode = childHandle.hashCode()
@@ -392,9 +388,9 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         if node.hasFn(om.MFn.kDisplayLayerManager):
 
             plug = plugutils.findPlug(node, 'displayLayerId')
-            indices = plug.getExistingArrayAttributeIndices()
+            connectionCount = plug.numConnectedElements()
 
-            return len(indices)
+            return connectionCount
 
         elif node.hasFn(om.MFn.kDisplayLayer):
 
@@ -440,9 +436,16 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         :rtype: QtCore.Qt.ItemFlag
         """
 
-        # Evaluate if index is draggable
+        # Evaluate associated node
         #
         node = self.nodeFromIndex(index)
+
+        if node.isNull():
+
+            return QtCore.Qt.NoItemFlags
+
+        # Evaluate if index is draggable
+        #
         isLayerManager = node.hasFn(om.MFn.kDisplayLayerManager)
         isLayer = node.hasFn(om.MFn.kDisplayLayer)
         isNode = node.hasFn(om.MFn.kDagNode)
@@ -608,10 +611,17 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
             raise TypeError(f'checkState() expects a valid column ({detail} given)!')
 
     def setCheckState(self, node, isChecked, detail=ViewDetail.NAME):
+        """
+        Updates the check-state for the supplied node for the specified detail.
+
+        :type node: om.MObject
+        :type isChecked: bool
+        :type detail: ViewDetail
+        :rtype: None
+        """
 
         # Evaluate supplied node
         #
-        print(detail)
         isLayer = node.hasFn(om.MFn.kDisplayLayer)
         isNode = node.hasFn(om.MFn.kDagNode)
 
@@ -691,6 +701,15 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
             return None
 
     def setData(self, index, value, role=None):
+        """
+        Sets the role data for the item at index to value.
+        Returns true if successful; otherwise returns false.
+
+        :type index: QtCore.QModelIndex
+        :type value: Any
+        :type role: QtCore.Qt.ItemDataRole
+        :rtype: bool
+        """
 
         # Evaluate associated node
         #
