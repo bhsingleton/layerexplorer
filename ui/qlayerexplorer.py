@@ -1,5 +1,5 @@
 from maya.api import OpenMaya as om
-from Qt import QtCore, QtWidgets, QtGui
+from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import quicwindow
 from dcc.maya.libs import dagutils
 from . import resources
@@ -9,6 +9,32 @@ import logging
 logging.basicConfig()
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
+
+
+def onSceneChanged(*args, **kwargs):
+    """
+    Callback method for any scene IO changes.
+
+    :rtype: None
+    """
+
+    # Check if instance exists
+    #
+    instance = QLayerExplorer.getInstance()
+
+    if instance is None:
+
+        return
+
+    # Evaluate if instance is still valid
+    #
+    if QtCompat.isValid(instance):
+
+        instance.sceneChanged(*args, **kwargs)
+
+    else:
+
+        log.warning('Unable to process scene changed callback!')
 
 
 class QLayerExplorer(quicwindow.QUicWindow):
@@ -29,6 +55,10 @@ class QLayerExplorer(quicwindow.QUicWindow):
         # Call parent method
         #
         super(QLayerExplorer, self).__init__(*args, **kwargs)
+
+        # Declare private variables
+        #
+        self._callbackId = None
 
         # Declare public variables
         #
@@ -66,6 +96,36 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.layerTreeView = None
         self.layerItemModel = None
         self.styledLayerItemDelegate = None
+    # endregion
+
+    # region Callbacks
+    def sceneChanged(self, *args, **kwargs):
+        """
+        Notifies all tabs of a scene change.
+
+        :key clientData: Any
+        :rtype: None
+        """
+
+        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
+    # endregion
+
+    # region Events
+    def closeEvent(self, event):
+        """
+        Event method called after the window has been closed.
+
+        :type event: QtGui.QCloseEvent
+        :rtype: None
+        """
+
+        # Call parent method
+        #
+        super(QLayerExplorer, self).closeEvent(event)
+
+        # Remove scene callback
+        #
+        om.MSceneMessage.removeCallback(self._callbackId)
     # endregion
 
     # region Methods
@@ -173,7 +233,6 @@ class QLayerExplorer(quicwindow.QUicWindow):
         #
         self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
         self.layerItemModel.setObjectName('layerItemModel')
-        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
 
         self.layerTreeView.setModel(self.layerItemModel)
 
@@ -181,6 +240,12 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
 
         self.layerTreeView.selectionModel().selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
+
+        # Register scene change callback
+        #
+        self._callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
+        self.sceneChanged()
+
     # endregion
 
     # region Slots
