@@ -1,0 +1,11 @@
+<RCC>
+  <qresource prefix="layerExplorer">
+    <file>icons/frozen.png</file>
+    <file>icons/hidden.png</file>
+    <file>icons/moveLayerDown.png</file>
+    <file>icons/moveLayerUp.png</file>
+    <file>icons/newEmptyLayer.png</file>
+    <file>icons/newLayer.png</file>
+    <file>icons/visible.png</file>
+  </qresource>
+</RCC>
