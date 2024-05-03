@@ -3,7 +3,7 @@ from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import quicwindow
 from dcc.maya.libs import dagutils
 from . import resources
-from .models import qlayeritemmodel, qstyledlayeritemdelegate
+from .models import qlayeritemmodel, qlayeritemfiltermodel, qstyledlayeritemdelegate
 
 import logging
 logging.basicConfig()
@@ -88,6 +88,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.helpOnDisplayLayersAction = None
 
         self.layerInteropWidget = None
+        self.searchLineEdit = None
         self.moveLayerUpPushButton = None
         self.moveLayerDownPushButton = None
         self.createEmptyLayerPushButton = None
@@ -95,6 +96,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         self.layerTreeView = None
         self.layerItemModel = None
+        self.layerItemFilterModel = None
         self.styledLayerItemDelegate = None
     # endregion
 
@@ -234,11 +236,21 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
         self.layerItemModel.setObjectName('layerItemModel')
 
-        self.layerTreeView.setModel(self.layerItemModel)
+        self.layerItemFilterModel = qlayeritemfiltermodel.QLayerItemFilterModel(parent=self.layerTreeView)
+        self.layerItemFilterModel.setObjectName('layerItemFilterModel')
+        self.layerItemFilterModel.setRecursiveFilteringEnabled(True)
+        self.layerItemFilterModel.setSourceModel(self.layerItemModel)
+
+        self.layerTreeView.setModel(self.layerItemFilterModel)
 
         self.styledLayerItemDelegate = qstyledlayeritemdelegate.QStyledLayerItemDelegate(parent=self.layerTreeView)
+        self.styledLayerItemDelegate.setObjectName('styledLayerItemDelegate')
+
         self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
 
+        # Connect signals
+        #
+        self.searchLineEdit.textEdited.connect(self.layerItemFilterModel.setFilterWildcard)
         self.layerTreeView.selectionModel().selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
 
         # Register scene change callback

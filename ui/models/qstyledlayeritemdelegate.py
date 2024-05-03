@@ -38,9 +38,16 @@ class QStyledLayerItemDelegate(QtWidgets.QStyledItemDelegate):
         style = QtWidgets.QApplication.instance().style()
         style.drawPrimitive(QtWidgets.QStyle.PE_PanelItemViewItem, option, painter, option.widget)
 
-        # Evaluate current column
+        # Evaluate source model
         #
         model = index.model()
+
+        if isinstance(model, QtCore.QSortFilterProxyModel):
+
+            model = model.sourceModel()
+
+        # Evaluate current column
+        #
         details = model.viewDetails()
         column = index.column()
 
