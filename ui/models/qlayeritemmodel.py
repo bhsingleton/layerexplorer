@@ -1,6 +1,7 @@
 from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui
 from enum import IntEnum
+from collections import defaultdict, deque
 from dcc.maya.libs import dagutils, layerutils, plugutils
 
 import logging
@@ -45,7 +46,9 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         self._headerLabels = [detail.name.title().replace('_', ' ') for detail in self._viewDetails]
         self._uniformRowHeight = kwargs.get('uniformRowHeight', 24.0)
         self._showNamespaces = True
-        self._layerManagers = []
+        self._layerManagers = deque()  # type: deque[int]
+        self._displayLayers = defaultdict(deque)  # type: defaultdict[int, deque[int]]
+        self._layerNodes = defaultdict(deque)  # type: defaultdict[int, deque[int]]
         self._internalIds = {}
     # endregion
 
@@ -54,7 +57,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         """
         Returns the root layer managers.
 
-        :rtype: List[om.MObjectHandle]
+        :rtype: deque[int]
         """
 
         return self._layerManagers
@@ -63,7 +66,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         """
         Updates the root layer managers.
 
-        :type layerManagers: List[om.MObjectHandle]
+        :type layerManagers: List[Union[str, om.MObject, om.MObjectHandle]]
         :rtype: None
         """
 
@@ -74,10 +77,15 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         # Reset internal trackers
         #
         self._layerManagers.clear()
-        self._layerManagers.extend(map(dagutils.getMObjectHandle, layerManagers))
-
         self._internalIds.clear()
-        self._internalIds.update({handle.hashCode(): handle for handle in self._layerManagers})
+
+        for layerManager in layerManagers:
+
+            layerManagerHandle = dagutils.getMObjectHandle(layerManager)
+            layerManagerHashCode = layerManagerHandle.hashCode()
+
+            self._layerManagers.append(layerManagerHashCode)
+            self._internalIds[layerManagerHashCode] = layerManagerHandle
 
         # Notify end of model reset
         #
@@ -145,6 +153,83 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
     # endregion
 
     # region Methods
+    def getDisplayLayers(self, layerManager):
+        """
+        Returns the display layers associated with the supplied layer manager.
+
+        :type layerManager: om.MObject
+        :rtype: deque[int]
+        """
+
+        # Get cached layers
+        #
+        layerManager = dagutils.getMObject(layerManager)
+        layerManagerHandle = dagutils.getMObjectHandle(layerManager)
+        layerManagerHashCode = layerManagerHandle.hashCode()
+
+        displayLayers = self._displayLayers[layerManagerHashCode]
+        numDisplayLayers = len(displayLayers)
+
+        # Check if cache requires updating
+        #
+        displayLayerIdPlug = plugutils.findPlug(layerManager, 'displayLayerId')
+        numConnectedElements = displayLayerIdPlug.numConnectedElements()
+
+        if numDisplayLayers != numConnectedElements:
+
+            displayLayers.clear()
+
+            for i in range(numConnectedElements):
+
+                displayLayerIdElement = displayLayerIdPlug.connectionByPhysicalIndex(i)
+                displayLayer = displayLayerIdElement.destinations()[0].node()
+                displayLayerHandle = dagutils.getMObjectHandle(displayLayer)
+                displayLayerHashCode = displayLayerHandle.hashCode()
+
+                displayLayers.append(displayLayerHashCode)
+                self._internalIds[displayLayerHashCode] = displayLayerHandle
+
+        return displayLayers
+
+    def getLayerNodes(self, displayLayer):
+        """
+        Returns the nodes associated with the supplied display layer.
+
+        :type displayLayer: om.MObject
+        :rtype: List[om.MObjectHandle]
+        """
+
+        # Get cached layer nodes
+        #
+        displayLayer = dagutils.getMObject(displayLayer)
+        displayLayerHandle = dagutils.getMObjectHandle(displayLayer)
+        displayLayerHashCode = displayLayerHandle.hashCode()
+
+        layerNodes = self._layerNodes[displayLayerHashCode]
+        numLayerNodes = len(layerNodes)
+
+        # Check if cache requires updating
+        #
+        drawInfoPlug = plugutils.findPlug(displayLayer, 'drawInfo')
+        destinations = drawInfoPlug.destinations()
+
+        numDestinations = len(destinations)
+
+        if numLayerNodes != numDestinations:
+
+            layerNodes.clear()
+
+            for destination in destinations:
+
+                layerNode = destination.node()
+                layerNodeHandle = dagutils.getMObjectHandle(layerNode)
+                layerNodeHashCode = layerNodeHandle.hashCode()
+
+                layerNodes.append(layerNodeHashCode)
+                self._internalIds[layerNodeHashCode] = layerNodeHandle
+
+        return layerNodes
+
     def nodeFromIndex(self, index):
         """
         Returns the node associated with the supplied index.
@@ -154,11 +239,11 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         """
 
         internalId = index.internalId()
-        handle = self._internalIds.get(internalId, om.MObjectHandle())
+        handle = self._internalIds.get(internalId, None)
 
-        if handle.isValid():
+        if isinstance(handle, om.MObjectHandle):
 
-            return handle.object()
+            return handle.object() if handle.isAlive() else om.MObject.kNullObj
 
         else:
 
@@ -182,34 +267,28 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         #
         if node.hasFn(om.MFn.kDagNode):
 
-            drawOverridePlug = plugutils.findPlug(node, 'drawOverride')
-            sourcePlug = drawOverridePlug.source()
-            destinations = sourcePlug.destinations()
-            row = destinations.index(drawOverridePlug)
+            displayLayer = layerutils.getLayerFromNode(node)
+            layerNodes = self.getLayerNodes(displayLayer)
+            layerNodeHashCode = dagutils.getMObjectHandle(node).hashCode()
+            row = layerNodes.index(layerNodeHashCode)
 
-            hashCode = om.MObjectHandle(node).hashCode()
-
-            return self.createIndex(row, 0, id=hashCode)
+            return self.createIndex(row, 0, id=layerNodeHashCode)
 
         elif node.hasFn(om.MFn.kDisplayLayer):
 
-            identificationPlug = plugutils.findPlug(node, 'identification')
-            sourcePlug = identificationPlug.source()
-            arrayPlug = sourcePlug.array()
-            connectionCount = arrayPlug.numConnectedElements()
-            elements = [arrayPlug.connectionByPhysicalIndex(i) for i in range(connectionCount)]
-            row = elements.index(sourcePlug)
+            layerManager = layerutils.getManagerFromLayer(node)
+            displayLayers = self.getDisplayLayers(layerManager)
+            displayLayerHashCode = dagutils.getMObjectHandle(node).hashCode()
+            row = displayLayers.index(displayLayerHashCode)
 
-            hashCode = om.MObjectHandle(node).hashCode()
-
-            return self.createIndex(row, 0, id=hashCode)
+            return self.createIndex(row, 0, id=displayLayerHashCode)
 
         elif node.hasFn(om.MFn.kDisplayLayerManager):
 
-            row = self._layerManagers.index(node)
-            hashCode = om.MObjectHandle(node).hashCode()
+            layerManagerHashCode = dagutils.getMObjectHandle(node).hashCode()
+            row = self._layerManagers.index(layerManagerHashCode)
 
-            return self.createIndex(row, 0, id=hashCode)
+            return self.createIndex(row, 0, id=layerManagerHashCode)
 
         else:
 
@@ -237,10 +316,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             if 0 <= row < maxRow:
 
-                handle = self._layerManagers[row]
-                hashCode = handle.hashCode()
-
-                return self.createIndex(row, column, id=hashCode)
+                return self.createIndex(row, column, id=self._layerManagers[row])
 
             else:
 
@@ -262,29 +338,12 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
                 # Check if row is in range
                 #
-                plug = plugutils.findPlug(node, 'displayLayerId')
-                maxRow = plug.numConnectedElements()
+                displayLayers = self.getDisplayLayers(node)
+                maxRow = len(displayLayers)
 
-                if not (0 <= row < maxRow):
+                if 0 <= row < maxRow:
 
-                    return QtCore.QModelIndex()
-
-                # Check if plug element is valid
-                #
-                element = plug.connectionByPhysicalIndex(row)
-
-                destinations = element.destinations()
-                numDestinations = len(destinations)
-
-                if numDestinations == 1:
-
-                    destination = destinations[0]
-                    childNode = destination.node()
-                    childHandle = om.MObjectHandle(childNode)
-                    hashCode = childHandle.hashCode()
-                    self._internalIds[hashCode] = childHandle
-
-                    return self.createIndex(row, column, id=hashCode)
+                    return self.createIndex(row, column, id=displayLayers[row])
 
                 else:
 
@@ -294,20 +353,12 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
                 # Check if row is in range
                 #
-                plug = plugutils.findPlug(node, 'drawInfo')
-
-                destinations = plug.destinations()
-                maxRow = len(destinations)
+                layerNodes = self.getLayerNodes(node)
+                maxRow = len(layerNodes)
 
                 if 0 <= row < maxRow:
 
-                    destination = destinations[row]
-                    childNode = destination.node()
-                    childHandle = om.MObjectHandle(childNode)
-                    hashCode = childHandle.hashCode()
-                    self._internalIds[hashCode] = childHandle
-
-                    return self.createIndex(row, column, id=hashCode)
+                    return self.createIndex(row, column, id=layerNodes[row])
 
                 else:
 
@@ -387,17 +438,17 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         #
         if node.hasFn(om.MFn.kDisplayLayerManager):
 
-            plug = plugutils.findPlug(node, 'displayLayerId')
-            connectionCount = plug.numConnectedElements()
+            displayLayers = self.getDisplayLayers(node)
+            numDisplayLayers = len(displayLayers)
 
-            return connectionCount
+            return numDisplayLayers
 
         elif node.hasFn(om.MFn.kDisplayLayer):
 
-            plug = plugutils.findPlug(node, 'drawInfo')
-            destinations = plug.destinations()
+            layerNodes = self.getLayerNodes(node)
+            numLayerNodes = len(layerNodes)
 
-            return len(destinations)
+            return numLayerNodes
 
         else:
 
@@ -424,9 +475,14 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         """
 
         node = self.nodeFromIndex(parent)
-        hasChildren = not node.hasFn(om.MFn.kDagNode)
 
-        return hasChildren
+        if node.isNull():
+
+            return True
+
+        else:
+
+            return node.hasFn(om.MFn.kDisplayLayerManager) or node.hasFn(om.MFn.kDisplayLayer)
 
     def flags(self, index):
         """
@@ -615,7 +671,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         Updates the check-state for the supplied node for the specified detail.
 
         :type node: om.MObject
-        :type isChecked: bool
+        :type isChecked: Union[bool, int]
         :type detail: ViewDetail
         :rtype: None
         """
@@ -634,18 +690,44 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         if detail == ViewDetail.NAME:
 
             plug = plugutils.findPlug(node, 'visibility')
-            plug.setBool(isChecked)
+
+            if plug.isConnected:
+
+                sourcePlug = plug.source()
+                sourcePlug.setBool(isChecked)
+
+            else:
+
+                plug.setBool(isChecked)
 
         elif detail == ViewDetail.PLAYBACK:
 
             plug = plugutils.findPlug(node, 'hideOnPlayback')
-            plug.setBool(isChecked)
+
+            if plug.isConnected:
+
+                sourcePlug = plug.source()
+                sourcePlug.setBool(isChecked)
+
+            else:
+
+                plug.setBool(isChecked)
 
         elif detail == ViewDetail.FROZEN:
 
-            plugName = 'displayType' if isLayer else 'template'
-            plug = plugutils.findPlug(node, plugName)
-            plug.setBool(isChecked)
+            if isLayer:
+
+                plug = plugutils.findPlug(node, 'displayType')
+                plug.setInt(isChecked)
+
+            elif isNode:
+
+                plug = plugutils.findPlug(node, 'template')
+                plug.setBool(isChecked)
+
+            else:
+
+                raise TypeError(f'setCheckState() expects a valid node ({node.apiTypeStr} given)!')
 
         else:
 
