@@ -180,11 +180,12 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.chronologicallyAction = QtWidgets.QAction('Chronologically', parent=self.layersMenu)
         self.chronologicallyAction.setObjectName('chronologicallyAction')
         self.chronologicallyAction.setCheckable(True)
-        self.chronologicallyAction.setChecked(True)
 
         self.alphabeticallyAction = QtWidgets.QAction('Alphabetically', parent=self.layersMenu)
         self.alphabeticallyAction.setObjectName('alphabeticallyAction')
         self.alphabeticallyAction.setCheckable(True)
+        self.alphabeticallyAction.setChecked(True)
+        self.alphabeticallyAction.triggered.connect(self.layerTreeView.setSortingEnabled)
 
         self.layerSortingActionGroup = QtWidgets.QActionGroup(self.layersMenu)
         self.layerSortingActionGroup.setObjectName('layerSortingActionGroup')
@@ -242,16 +243,19 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.layerItemFilterModel.setSourceModel(self.layerItemModel)
 
         self.layerTreeView.setModel(self.layerItemFilterModel)
+        self.layerTreeView.setSortingEnabled(True)
+        self.layerTreeView.sortByColumn(0, QtCore.Qt.AscendingOrder)
 
         self.styledLayerItemDelegate = qstyledlayeritemdelegate.QStyledLayerItemDelegate(parent=self.layerTreeView)
         self.styledLayerItemDelegate.setObjectName('styledLayerItemDelegate')
 
         self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
 
-        # Connect signals
+        self.layerTreeView.selectionModel().selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
+
+        # Initialize search bar
         #
         self.searchLineEdit.textEdited.connect(self.layerItemFilterModel.setFilterWildcard)
-        self.layerTreeView.selectionModel().selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
 
         # Register scene change callback
         #
@@ -261,6 +265,28 @@ class QLayerExplorer(quicwindow.QUicWindow):
     # endregion
 
     # region Slots
+    @QtCore.Slot(bool)
+    def on_chronologicallyAction_triggered(self, checked=False):
+        """
+        Slot method for the `chronologicallyAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerTreeView.setSortingEnabled(not checked)
+
+    @QtCore.Slot(bool)
+    def on_alphabeticallyAction_triggered(self, checked=False):
+        """
+        Slot method for the `alphabeticallyAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerTreeView.setSortingEnabled(checked)
+
     @QtCore.Slot(QtCore.QItemSelection, QtCore.QItemSelection)
     def on_layerSelectionModel_selectionChanged(self, selected, deselected):
         """
