@@ -1,6 +1,7 @@
 <RCC>
   <qresource prefix="layerExplorer">
     <file>icons/frozen.png</file>
+    <file>icons/playback.png</file>
     <file>icons/hidden.png</file>
     <file>icons/moveLayerDown.png</file>
     <file>icons/moveLayerUp.png</file>

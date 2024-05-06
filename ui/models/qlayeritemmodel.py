@@ -18,7 +18,6 @@ class ViewDetail(IntEnum):
     NAME = 0
     FROZEN = 1
     PLAYBACK = 2
-    LEVEL_OF_DETAIL = 3
 
 
 class QLayerItemModel(QtCore.QAbstractItemModel):
@@ -42,7 +41,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
         # Declare private variables
         #
-        self._viewDetails = [ViewDetail.NAME]
+        self._viewDetails = [ViewDetail.NAME, ViewDetail.FROZEN, ViewDetail.PLAYBACK]
         self._headerLabels = [detail.name.title().replace('_', ' ') for detail in self._viewDetails]
         self._uniformRowHeight = kwargs.get('uniformRowHeight', 24.0)
         self._showNamespaces = True
@@ -478,7 +477,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
         if node.isNull():
 
-            return True
+            return True  # All top-level items have children!
 
         else:
 
@@ -536,22 +535,11 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         
         # Evaluate if index is checkable
         #
-        isFrozenColumn = self._viewDetails[column] == ViewDetail.FROZEN
-        supportsTriState = isLayer and isFrozenColumn
-
         isCheckable = (isNode and isNameColumn) or isLayer
 
-        if supportsTriState:
-
-            flags |= QtCore.Qt.ItemIsUserTristate
-
-        elif isCheckable:
+        if isCheckable:
 
             flags |= QtCore.Qt.ItemIsUserCheckable
-
-        else:
-
-            pass
 
         return flags
 
@@ -605,6 +593,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         textWidth = fontMetrics.boundingRect(text).width()
 
         columnWidth = textWidth if textWidth > self._uniformRowHeight else self._uniformRowHeight
+        columnWidth += self.parent().indentation()
 
         return QtCore.QSize(columnWidth, self._uniformRowHeight)
 
@@ -649,7 +638,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
                 plug = plugutils.findPlug(node, 'displayType')
                 displayType = plug.asInt()
 
-                return QtCore.Qt.Checked if (displayType == 0) else QtCore.Qt.PartiallyChecked if (displayType == 1) else QtCore.Qt.Unchecked
+                return QtCore.Qt.Unchecked if (displayType == 0) else QtCore.Qt.Checked
 
             elif isNode:
 
@@ -673,7 +662,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         :type node: om.MObject
         :type isChecked: Union[bool, int]
         :type detail: ViewDetail
-        :rtype: None
+        :rtype: bool
         """
 
         # Evaluate supplied node
@@ -683,7 +672,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
         if not (isLayer or isNode):
 
-            return
+            return False
 
         # Evaluate requested column
         #
@@ -717,8 +706,10 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             if isLayer:
 
+                displayType = 2 if isChecked else 0
+
                 plug = plugutils.findPlug(node, 'displayType')
-                plug.setInt(isChecked)
+                plug.setInt(displayType)
 
             elif isNode:
 
@@ -727,11 +718,13 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             else:
 
-                raise TypeError(f'setCheckState() expects a valid node ({node.apiTypeStr} given)!')
+                return False
 
         else:
 
-            raise TypeError(f'setCheckState() expects a valid column ({detail} given)!')
+            return False
+
+        return True
 
     def data(self, index, role=None):
         """
@@ -755,9 +748,13 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         column = index.column()
         detail = self._viewDetails[column]
 
-        if role in (QtCore.Qt.DisplayRole, QtCore.Qt.EditRole):
+        if role == QtCore.Qt.DisplayRole:
 
-            return str(self.detail(node, detail=detail))
+            return str(self.data(index, role=QtCore.Qt.EditRole))
+
+        elif role == QtCore.Qt.EditRole:
+
+            return self.detail(node, detail=detail)
 
         elif role == QtCore.Qt.DecorationRole:
 
@@ -774,7 +771,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         elif role == QtCore.Qt.TextAlignmentRole:
 
             isNameColumn = detail == ViewDetail.NAME
-            alignment = QtCore.Qt.AlignVCenter if isNameColumn else QtCore.Qt.AlignCenter
+            alignment = QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter if isNameColumn else QtCore.Qt.AlignCenter
 
             return alignment
 
@@ -812,8 +809,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
         elif role == QtCore.Qt.CheckStateRole:
 
-            self.setCheckState(node, value, detail=detail)
-            return True
+            return self.setCheckState(node, value, detail=detail)
 
         else:
 
@@ -838,6 +834,11 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
             if role == QtCore.Qt.DisplayRole:
 
                 return self._headerLabels[section]
+
+            elif role == QtCore.Qt.TextAlignmentRole:
+
+                isNameColumn = self._viewDetails[section] == ViewDetail.NAME
+                return QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter if isNameColumn else QtCore.Qt.AlignCenter
 
             else:
 
