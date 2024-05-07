@@ -560,6 +560,25 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             return ''
 
+    def setDetail(self, node, value, detail=ViewDetail.NAME):
+        """
+        Updates the detail for the supplied node in the specified column.
+
+        :type node: om.MObject
+        :type value: Any
+        :type detail: ViewDetail
+        :rtype: Any
+        """
+
+        if detail == ViewDetail.NAME:
+
+            dagutils.renameNode(node, value)
+            return True
+
+        else:
+
+            return False
+
     def decoration(self, node, detail=ViewDetail.NAME):
         """
         Returns the decoration for the supplied node in the specified column.
@@ -805,11 +824,23 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
         if role == QtCore.Qt.EditRole:
 
-            return False
+            success = self.setDetail(node, value, detail=detail)
+
+            if success:
+
+                self.dataChanged.emit(index, index, [role])
+
+            return success
 
         elif role == QtCore.Qt.CheckStateRole:
 
-            return self.setCheckState(node, value, detail=detail)
+            success = self.setCheckState(node, value, detail=detail)
+
+            if success:
+
+                self.dataChanged.emit(index, index, [role])
+
+            return success
 
         else:
 
