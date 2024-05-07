@@ -304,50 +304,44 @@ class QLayerExplorer(quicwindow.QUicWindow):
         :rtype: None
         """
 
-        # Evaluate data roles
-        #
-        numRoles = len(roles)
-
-        if numRoles != 1:
-
-            return
-
         # Evaluate data role
         #
-        role = roles[0]
+        role = roles[0] if len(roles) == 1 else None
 
         if role != QtCore.Qt.CheckStateRole:
 
             return
 
-        # Propagate check state change to other selected indices
+        # Evaluate selection count
+        #
+        itemSelection = self.layerSelectionModel.selection()
+        sourceIndices = [self.layerItemFilterModel.mapToSource(index) for index in itemSelection.indexes()]
+
+        column = topLeft.column()
+        rowIndices = [index for index in sourceIndices if index.column() == column]
+        numRows = len(rowIndices)
+
+        if not (numRows >= 2):
+
+            return
+
+        # Propagate check state change to other rows
         #
         model = self.sender()
-        column = topLeft.column()
         checkState = topLeft.data(role=role)
 
         with qsignalblocker.QSignalBlocker(model):
 
-            # Store current selection in case we need to recreate it later on!
-            #
-            self._dataChanges = self.layerSelectionModel.selection()
+            self._dataChanges = itemSelection  # Store current selection in case we need to recreate it later on!
 
-            for index in self._dataChanges.indexes():
+            for index in rowIndices:
 
-                sourceIndex = self.layerItemFilterModel.mapToSource(index)
-
-                if sourceIndex.column() == column:
-
-                    model.setData(sourceIndex, checkState, role=role)
-
-                else:
-
-                    continue
+                model.setData(index, checkState, role=role)
 
     @QtCore.Slot(QtCore.QItemSelection, QtCore.QItemSelection)
     def on_layerSelectionModel_selectionChanged(self, selected, deselected):
         """
-        Slot method for the `layerTreeView` widget's `selectionChanged` signal.
+        Slot method for the `layerSelectionModel` widget's `selectionChanged` signal.
 
         :type selected: QtCore.QItemSelection
         :type deselected: QtCore.QItemSelection
@@ -355,6 +349,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
         """
 
         # Check if any data changes recently occurred
+        # If so, then we need to recreate the original selection!
         #
         selectionLost = any([self._dataChanges.contains(index) for index in deselected.indexes()])
 
