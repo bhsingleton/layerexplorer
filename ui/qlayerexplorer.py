@@ -2,6 +2,7 @@ from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import quicwindow
 from dcc.maya.libs import dagutils
+from dcc.ui import qsignalblocker
 from . import resources
 from .models import qlayeritemmodel, qlayeritemfiltermodel, qstyledlayeritemdelegate
 
@@ -59,6 +60,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
         # Declare private variables
         #
         self._callbackId = None
+        self._dataChanges = QtCore.QItemSelection()
 
         # Declare public variables
         #
@@ -96,6 +98,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         self.layerTreeView = None
         self.layerItemModel = None
+        self.layerSelectionModel = None
         self.layerItemFilterModel = None
         self.styledLayerItemDelegate = None
     # endregion
@@ -236,6 +239,7 @@ class QLayerExplorer(quicwindow.QUicWindow):
         #
         self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
         self.layerItemModel.setObjectName('layerItemModel')
+        self.layerItemModel.dataChanged.connect(self.on_layerItemModel_dataChanged)
 
         self.layerItemFilterModel = qlayeritemfiltermodel.QLayerItemFilterModel(parent=self.layerTreeView)
         self.layerItemFilterModel.setObjectName('layerItemFilterModel')
@@ -251,7 +255,9 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
 
-        self.layerTreeView.selectionModel().selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
+        self.layerSelectionModel = self.layerTreeView.selectionModel()
+        self.layerSelectionModel.setObjectName('layerSelectionModel')
+        self.layerSelectionModel.selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
 
         # Initialize search bar
         #
@@ -287,6 +293,57 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         self.layerTreeView.setSortingEnabled(checked)
 
+    @QtCore.Slot(QtCore.QModelIndex, QtCore.QModelIndex, list)
+    def on_layerItemModel_dataChanged(self, topLeft, bottomRight, roles=None):
+        """
+        Slot method for the `layerItemModel` widget's `dataChanged` signal.
+
+        :type topLeft: QtCore.QModelIndex
+        :type bottomRight: QtCore.QModelIndex
+        :type roles: List[QtCore.Qt.ItemDataRole]
+        :rtype: None
+        """
+
+        # Evaluate data roles
+        #
+        numRoles = len(roles)
+
+        if numRoles != 1:
+
+            return
+
+        # Evaluate data role
+        #
+        role = roles[0]
+
+        if role != QtCore.Qt.CheckStateRole:
+
+            return
+
+        # Propagate check state change to other selected indices
+        #
+        model = self.sender()
+        column = topLeft.column()
+        checkState = topLeft.data(role=role)
+
+        with qsignalblocker.QSignalBlocker(model):
+
+            # Store current selection in case we need to recreate it later on!
+            #
+            self._dataChanges = self.layerSelectionModel.selection()
+
+            for index in self._dataChanges.indexes():
+
+                sourceIndex = self.layerItemFilterModel.mapToSource(index)
+
+                if sourceIndex.column() == column:
+
+                    model.setData(sourceIndex, checkState, role=role)
+
+                else:
+
+                    continue
+
     @QtCore.Slot(QtCore.QItemSelection, QtCore.QItemSelection)
     def on_layerSelectionModel_selectionChanged(self, selected, deselected):
         """
@@ -297,15 +354,30 @@ class QLayerExplorer(quicwindow.QUicWindow):
         :rtype: None
         """
 
-        # Collect dag nodes
+        # Check if any data changes recently occurred
+        #
+        selectionLost = any([self._dataChanges.contains(index) for index in deselected.indexes()])
+
+        if selectionLost:
+
+            selected.merge(self._dataChanges, QtCore.QItemSelectionModel.Select)
+            self._dataChanges.clear()
+
+            with qsignalblocker.QSignalBlocker(self.layerSelectionModel):
+
+                self.layerSelectionModel.select(selected, QtCore.QItemSelectionModel.Select)
+
+        # Collect dag nodes from selected indices
         #
         indexes = [self.layerItemFilterModel.mapToSource(index) for index in selected.indexes() if index.column() == 0]
         nodes = list(map(self.layerItemModel.nodeFromIndex, indexes))
+
         selectionList = dagutils.createSelectionList(nodes)
 
         # Evaluate keyboard modifiers
         #
         modifiers = QtWidgets.QApplication.keyboardModifiers()
+
         shiftPressed = QtCore.Qt.ShiftModifier & modifiers
         controlPressed = QtCore.Qt.ControlModifier & modifiers
 
