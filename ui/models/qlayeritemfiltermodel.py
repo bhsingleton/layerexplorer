@@ -1,3 +1,4 @@
+from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui
 from . import qlayeritemmodel
 
@@ -43,19 +44,33 @@ class QLayerItemFilterModel(QtCore.QSortFilterProxyModel):
 
         # Check if default layer should be hidden
         #
-        if self._hideDefaultLayer:
+        model = self.sourceModel()  # type: qlayeritemmodel.QLayerItemModel
+        index = model.index(row, 0, parent=parent)
 
-            model = self.sourceModel()  # type: qlayeritemmodel.QLayerItemModel
-            index = model.index(row, 0, parent=parent)
-            text = index.data(role=QtCore.Qt.DisplayRole)
+        node = model.nodeFromIndex(index)
 
-            name = text if text is not None else ''
+        if node.hasFn(om.MFn.kDisplayLayerManager):
 
-            if name.endswith('defaultLayer'):
+            return True  # Accept layer managers to prevent DAG nodes from being obscured!
 
-                return False
+        elif node.hasFn(om.MFn.kDisplayLayer):
 
-        # Call parent method
-        #
-        return super(QLayerItemFilterModel, self).filterAcceptsRow(row, parent)
+            # Check if default layer should be hidden
+            #
+            if self._hideDefaultLayer:
+
+                text = index.data(role=QtCore.Qt.DisplayRole)
+                name = text if text is not None else ''
+
+                return not name.endswith('defaultLayer')
+
+            else:
+
+                return True
+
+        else:
+
+            # Call parent method
+            #
+            return super(QLayerItemFilterModel, self).filterAcceptsRow(row, parent)
     # endregion

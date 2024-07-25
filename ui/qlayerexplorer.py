@@ -1,6 +1,6 @@
 from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
-from dcc.ui import quicwindow
+from dcc.ui import qsingletonwindow
 from dcc.maya.libs import dagutils
 from dcc.ui import qsignalblocker
 from . import resources
@@ -38,9 +38,9 @@ def onSceneChanged(*args, **kwargs):
         log.warning('Unable to process scene changed callback!')
 
 
-class QLayerExplorer(quicwindow.QUicWindow):
+class QLayerExplorer(qsingletonwindow.QSingletonWindow):
     """
-    Overload of `QUicWindow` that interfaces with display layers.
+    Overload of `QSingletonWindow` that interfaces with display layers.
     """
 
     # region Dunderscores
@@ -59,94 +59,121 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         # Declare private variables
         #
-        self._callbackId = None
+        self._callbackIds = om.MCallbackIdArray()
         self._dataChanges = QtCore.QItemSelection()
 
-        # Declare public variables
-        #
-        self.layersMenu = None  # type: QtWidgets.QMenu
-        self.createEmptyLayerAction = None
-        self.createLayerFromSelectedAction = None
-        self.selectObjectsInSelectedLayersAction = None
-        self.removeSelectedObjectsFromSelectedLayersAction = None
-        self.membershipAction = None
-        self.attributesAction = None
-        self.deleteSelectedLayersAction = None
-        self.deleteUnusedLayersAction = None
-        self.setAllLayersAction = None
-        self.setSelectedLayersAction = None
-        self.setOnlySelectedLayersAction = None
-        self.chronologicallyAction = None
-        self.alphabeticallyAction = None
-        self.layerSortingActionGroup = None
-
-        self.optionsMenu = None  # type: QtWidgets.QMenu
-        self.makeNewLayersCurrentAction = None
-        self.addNewObjectsToCurrentLayerAction = None
-        self.autoOverridesAction = None
-        self.showNamespaceAction = None
-
-        self.helpMenu = None  # type: QtWidgets.QMenu
-        self.helpOnDisplayLayersAction = None
-
-        self.layerInteropWidget = None
-        self.searchLineEdit = None
-        self.moveLayerUpPushButton = None
-        self.moveLayerDownPushButton = None
-        self.createEmptyLayerPushButton = None
-        self.createLayerFromSelectedPushButton = None
-
-        self.layerTreeView = None
-        self.layerItemModel = None
-        self.layerSelectionModel = None
-        self.layerItemFilterModel = None
-        self.styledLayerItemDelegate = None
-    # endregion
-
-    # region Callbacks
-    def sceneChanged(self, *args, **kwargs):
+    def __setup_ui__(self, *args, **kwargs):
         """
-        Notifies all tabs of a scene change.
-
-        :key clientData: Any
-        :rtype: None
-        """
-
-        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
-    # endregion
-
-    # region Events
-    def closeEvent(self, event):
-        """
-        Event method called after the window has been closed.
-
-        :type event: QtGui.QCloseEvent
-        :rtype: None
-        """
-
-        # Call parent method
-        #
-        super(QLayerExplorer, self).closeEvent(event)
-
-        # Remove scene callback
-        #
-        om.MSceneMessage.removeCallback(self._callbackId)
-    # endregion
-
-    # region Methods
-    def postLoad(self, *args, **kwargs):
-        """
-        Called after the user interface has been loaded.
+        Private method that initializes the user interface.
 
         :rtype: None
         """
 
         # Call parent method
         #
-        super(QLayerExplorer, self).postLoad(*args, **kwargs)
+        super(QLayerExplorer, self).__setup_ui__(self, *args, **kwargs)
 
-        # Initialize layer menu actions
+        # Initialize main window
         #
+        self.setWindowTitle("|| Layer Explorer")
+        self.setMinimumSize(QtCore.QSize(450, 450))
+
+        # Initialize central widget
+        #
+        centralLayout = QtWidgets.QVBoxLayout()
+        centralLayout.setObjectName('centralLayout')
+
+        centralWidget = QtWidgets.QWidget()
+        centralWidget.setObjectName('centralWidget')
+        centralWidget.setLayout(centralLayout)
+
+        self.setCentralWidget(centralWidget)
+
+        # Initialize interop widget
+        #
+        self.interopLayout = QtWidgets.QHBoxLayout()
+        self.interopLayout.setObjectName('interopLayout')
+        self.interopLayout.setContentsMargins(0, 0, 0, 0)
+
+        self.interopWidget = QtWidgets.QWidget()
+        self.interopWidget.setObjectName('interopWidget')
+        self.interopWidget.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.interopWidget.setFixedHeight(24)
+        self.interopWidget.setLayout(self.interopLayout)
+
+        self.searchLineEdit = QtWidgets.QLineEdit()
+        self.searchLineEdit.setObjectName('searchLineEdit')
+        self.searchLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred))
+
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
+        sizePolicy.setHeightForWidth(True)
+
+        self.moveLayerUpPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerUp.png'), '')
+        self.moveLayerUpPushButton.setObjectName('moveLayerUpPushButton')
+        self.moveLayerUpPushButton.setSizePolicy(sizePolicy)
+
+        self.moveLayerDownPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerDown.png'), '')
+        self.moveLayerDownPushButton.setObjectName('moveLayerDownPushButton')
+        self.moveLayerDownPushButton.setSizePolicy(sizePolicy)
+
+        self.createEmptyLayerPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newEmptyLayer.png'), '')
+        self.createEmptyLayerPushButton.setObjectName('createEmptyLayerPushButton')
+        self.createEmptyLayerPushButton.setSizePolicy(sizePolicy)
+
+        self.createLayerFromSelectedPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newLayer.png'), '')
+        self.createLayerFromSelectedPushButton.setObjectName('createLayerFromSelectedPushButton')
+        self.createLayerFromSelectedPushButton.setSizePolicy(sizePolicy)
+
+        self.interopLayout.addWidget(self.searchLineEdit)
+        self.interopLayout.addWidget(self.moveLayerUpPushButton)
+        self.interopLayout.addWidget(self.moveLayerDownPushButton)
+        self.interopLayout.addWidget(self.createEmptyLayerPushButton)
+        self.interopLayout.addWidget(self.createLayerFromSelectedPushButton)
+
+        centralLayout.addWidget(self.interopWidget)
+
+        # Initialize layer tree view
+        #
+        self.layerTreeView = QtWidgets.QTreeView()
+        self.layerTreeView.setObjectName('layerTreeView')
+
+        self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
+        self.layerItemModel.setObjectName('layerItemModel')
+        self.layerItemModel.dataChanged.connect(self.on_layerItemModel_dataChanged)
+
+        self.layerItemFilterModel = qlayeritemfiltermodel.QLayerItemFilterModel(parent=self.layerTreeView)
+        self.layerItemFilterModel.setObjectName('layerItemFilterModel')
+        self.layerItemFilterModel.setSourceModel(self.layerItemModel)
+
+        self.searchLineEdit.textEdited.connect(self.layerItemFilterModel.setFilterWildcard)
+
+        self.layerTreeView.setModel(self.layerItemFilterModel)
+        self.layerTreeView.setSortingEnabled(True)
+        self.layerTreeView.sortByColumn(0, QtCore.Qt.AscendingOrder)
+
+        self.styledLayerItemDelegate = qstyledlayeritemdelegate.QStyledLayerItemDelegate(parent=self.layerTreeView)
+        self.styledLayerItemDelegate.setObjectName('styledLayerItemDelegate')
+
+        self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
+
+        self.layerSelectionModel = self.layerTreeView.selectionModel()
+        self.layerSelectionModel.setObjectName('layerSelectionModel')
+        self.layerSelectionModel.selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
+
+        centralLayout.addWidget(self.layerTreeView)
+
+        # Initialize menu-bar
+        #
+        mainMenuBar = QtWidgets.QMenuBar(self)
+        mainMenuBar.setObjectName('mainMenuBar')
+
+        self.setMenuBar(mainMenuBar)
+
+        # Initialize layers menu
+        #
+        self.layersMenu = mainMenuBar.addMenu('&Layers')
+        self.layersMenu.setObjectName('layersMenu')
+
         self.createEmptyLayerAction = QtWidgets.QAction('Create Empty Layer', parent=self.layersMenu)
         self.createEmptyLayerAction.setObjectName('createEmptyLayerAction')
 
@@ -208,8 +235,11 @@ class QLayerExplorer(quicwindow.QUicWindow):
         self.layersMenu.addSeparator()
         self.layersMenu.addActions([self.chronologicallyAction, self.alphabeticallyAction])
 
-        # Initialize options menu actions
+        # Initialize options menu
         #
+        self.optionsMenu = mainMenuBar.addMenu('&Options')
+        self.optionsMenu.setObjectName('optionsMenu')
+
         self.makeNewLayersCurrentAction = QtWidgets.QAction('Make New Layers Current', parent=self.optionsMenu)
         self.makeNewLayersCurrentAction.setObjectName('makeNewLayersCurrentAction')
         self.makeNewLayersCurrentAction.setCheckable(True)
@@ -230,44 +260,61 @@ class QLayerExplorer(quicwindow.QUicWindow):
 
         # Initialize help menu actions
         #
+        self.helpMenu = mainMenuBar.addMenu('&Help')
+        self.helpMenu.setObjectName('helpMenu')
+
         self.helpOnDisplayLayersAction = QtWidgets.QAction('Help on Display Layers', parent=self.helpMenu)
         self.helpOnDisplayLayersAction.setObjectName('helpOnDisplayLayersAction')
 
         self.helpMenu.addAction(self.helpOnDisplayLayersAction)
+    # endregion
 
-        # Initialize layer item model
+    # region Callbacks
+    def sceneChanged(self, *args, **kwargs):
+        """
+        Notifies all tabs of a scene change.
+
+        :key clientData: Any
+        :rtype: None
+        """
+
+        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
+    # endregion
+
+    # region Methods
+    def addCallbacks(self):
+        """
+        Adds any callbacks required by this window.
+
+        :rtype: None
+        """
+
+        # Add callbacks
         #
-        self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
-        self.layerItemModel.setObjectName('layerItemModel')
-        self.layerItemModel.dataChanged.connect(self.on_layerItemModel_dataChanged)
+        hasCallbacks = len(self._callbackIds) > 0
 
-        self.layerItemFilterModel = qlayeritemfiltermodel.QLayerItemFilterModel(parent=self.layerTreeView)
-        self.layerItemFilterModel.setObjectName('layerItemFilterModel')
-        self.layerItemFilterModel.setRecursiveFilteringEnabled(True)
-        self.layerItemFilterModel.setSourceModel(self.layerItemModel)
+        if not hasCallbacks:
 
-        self.layerTreeView.setModel(self.layerItemFilterModel)
-        self.layerTreeView.setSortingEnabled(True)
-        self.layerTreeView.sortByColumn(0, QtCore.Qt.AscendingOrder)
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
+            self._callbackIds.append(callbackId)
 
-        self.styledLayerItemDelegate = qstyledlayeritemdelegate.QStyledLayerItemDelegate(parent=self.layerTreeView)
-        self.styledLayerItemDelegate.setObjectName('styledLayerItemDelegate')
+            self.sceneChanged()
 
-        self.layerTreeView.setItemDelegate(self.styledLayerItemDelegate)
+    def removeCallbacks(self):
+        """
+        Removes any callbacks created by this window.
 
-        self.layerSelectionModel = self.layerTreeView.selectionModel()
-        self.layerSelectionModel.setObjectName('layerSelectionModel')
-        self.layerSelectionModel.selectionChanged.connect(self.on_layerSelectionModel_selectionChanged)
+        :rtype: None
+        """
 
-        # Initialize search bar
+        # Remove callbacks
         #
-        self.searchLineEdit.textEdited.connect(self.layerItemFilterModel.setFilterWildcard)
+        hasCallbacks = len(self._callbackIds) > 0
 
-        # Register scene change callback
-        #
-        self._callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
-        self.sceneChanged()
+        if hasCallbacks:
 
+            om.MMessage.removeCallbacks(self._callbackIds)
+            self._callbackIds.clear()
     # endregion
 
     # region Slots

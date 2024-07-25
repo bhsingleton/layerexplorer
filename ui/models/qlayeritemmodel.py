@@ -1,3 +1,4 @@
+from maya import cmds as mc
 from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui
 from enum import IntEnum
@@ -372,7 +373,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         Returns the parent of the model item with the given index.
         If the item has no parent, an invalid QModelIndex is returned.
 
-        :type index: QtCore.QModelIndex
+        :arg index: QtCore.QModelIndex
         :rtype: QtCore.QModelIndex
         """
 
@@ -482,6 +483,26 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         else:
 
             return node.hasFn(om.MFn.kDisplayLayerManager) or node.hasFn(om.MFn.kDisplayLayer)
+
+    def fetchMore(self, parent):
+        """
+        Fetches any available data for the items with the parent specified by the parent index.
+
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        pass
+
+    def canFetchMore(self, parent):
+        """
+        Returns true if there is more data available for parent; otherwise returns false.
+
+        :type parent: QtCore.QModelIndex
+        :rtype: bool
+        """
+
+        return self.hasChildren(parent=parent)
 
     def flags(self, index):
         """
@@ -630,36 +651,50 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         isLayer = node.hasFn(om.MFn.kDisplayLayer)
         isNode = node.hasFn(om.MFn.kDagNode)
 
-        if not (isLayer or isNode):
+        if isLayer:
 
-            return
+            # Evaluate requested column
+            #
+            buttonName = dagutils.getNodeName(node, includeNamespace=True).lstrip(':')
 
-        # Evaluate requested column
-        #
-        if detail == ViewDetail.NAME:
+            if detail == ViewDetail.NAME:
 
-            plug = plugutils.findPlug(node, 'visibility')
-            isVisible = plug.asBool()
+                layerVisible = mc.layerButton(buttonName, query=True, layerVisible=True)
+                return QtCore.Qt.Checked if layerVisible else QtCore.Qt.Unchecked
 
-            return QtCore.Qt.Checked if isVisible else QtCore.Qt.Unchecked
+            elif detail == ViewDetail.PLAYBACK:
 
-        elif detail == ViewDetail.PLAYBACK:
+                layerHideOnPlayback = mc.layerButton(buttonName, query=True, layerHideOnPlayback=True)
+                return QtCore.Qt.Checked if layerHideOnPlayback else QtCore.Qt.Unchecked
 
-            plug = plugutils.findPlug(node, 'hideOnPlayback')
-            isHidden = plug.asBool()
+            elif detail == ViewDetail.FROZEN:
 
-            return QtCore.Qt.Checked if isHidden else QtCore.Qt.Unchecked
+                layerState = mc.layerButton(buttonName, query=True, layerState=True)
+                return QtCore.Qt.Unchecked if (layerState == 'normal') else QtCore.Qt.Checked
 
-        elif detail == ViewDetail.FROZEN:
+            else:
 
-            if isLayer:
+                return None
 
-                plug = plugutils.findPlug(node, 'displayType')
-                displayType = plug.asInt()
+        elif isNode:
 
-                return QtCore.Qt.Unchecked if (displayType == 0) else QtCore.Qt.Checked
+            # Evaluate requested column
+            #
+            if detail == ViewDetail.NAME:
 
-            elif isNode:
+                plug = plugutils.findPlug(node, 'visibility')
+                isVisible = plug.asBool()
+
+                return QtCore.Qt.Checked if isVisible else QtCore.Qt.Unchecked
+
+            elif detail == ViewDetail.PLAYBACK:
+
+                plug = plugutils.findPlug(node, 'hideOnPlayback')
+                isHidden = plug.asBool()
+
+                return QtCore.Qt.Checked if isHidden else QtCore.Qt.Unchecked
+
+            elif detail == ViewDetail.FROZEN:
 
                 plug = plugutils.findPlug(node, 'template')
                 isTemplate = plug.asBool()
@@ -668,18 +703,18 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             else:
 
-                raise TypeError(f'checkState() expects a valid node ({node.apiTypeStr} given)!')
+                return None
 
         else:
 
-            raise TypeError(f'checkState() expects a valid column ({detail} given)!')
+            return None
 
-    def setCheckState(self, node, isChecked, detail=ViewDetail.NAME):
+    def setCheckState(self, node, checkState, detail=ViewDetail.NAME):
         """
         Updates the check-state for the supplied node for the specified detail.
 
         :type node: om.MObject
-        :type isChecked: Union[bool, int]
+        :type checkState: QtCore.Qt.CheckState
         :type detail: ViewDetail
         :rtype: bool
         """
@@ -689,61 +724,85 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         isLayer = node.hasFn(om.MFn.kDisplayLayer)
         isNode = node.hasFn(om.MFn.kDagNode)
 
-        if not (isLayer or isNode):
+        isChecked = checkState == QtCore.Qt.Checked
 
-            return False
+        if isLayer:
 
-        # Evaluate requested column
-        #
-        if detail == ViewDetail.NAME:
+            # Evaluate requested column
+            #
+            buttonName = dagutils.getNodeName(node, includeNamespace=True).lstrip(':')
 
-            plug = plugutils.findPlug(node, 'visibility')
+            if detail == ViewDetail.NAME:
 
-            if plug.isConnected:
+                mc.layerButton(buttonName, edit=True, layerVisible=isChecked)
 
-                sourcePlug = plug.source()
-                sourcePlug.setBool(isChecked)
+            elif detail == ViewDetail.PLAYBACK:
 
-            else:
+                mc.layerButton(buttonName, edit=True, layerHideOnPlayback=isChecked)
 
-                plug.setBool(isChecked)
+            elif detail == ViewDetail.FROZEN:
 
-        elif detail == ViewDetail.PLAYBACK:
-
-            plug = plugutils.findPlug(node, 'hideOnPlayback')
-
-            if plug.isConnected:
-
-                sourcePlug = plug.source()
-                sourcePlug.setBool(isChecked)
-
-            else:
-
-                plug.setBool(isChecked)
-
-        elif detail == ViewDetail.FROZEN:
-
-            if isLayer:
-
-                displayType = 2 if isChecked else 0
-
-                plug = plugutils.findPlug(node, 'displayType')
-                plug.setInt(displayType)
-
-            elif isNode:
-
-                plug = plugutils.findPlug(node, 'template')
-                plug.setBool(isChecked)
+                layerState = 'reference' if isChecked else 'normal'
+                mc.layerButton(buttonName, edit=True, layerState=layerState)
 
             else:
 
                 return False
 
+            return True
+
+        elif isNode:
+
+            # Evaluate requested column
+            #
+            if detail == ViewDetail.NAME:
+
+                plug = plugutils.findPlug(node, 'visibility')
+
+                if plug.isConnected:
+
+                    sourcePlug = plug.source()
+                    sourcePlug.setBool(isChecked)
+
+                else:
+
+                    plug.setBool(isChecked)
+
+            elif detail == ViewDetail.PLAYBACK:
+
+                plug = plugutils.findPlug(node, 'hideOnPlayback')
+
+                if plug.isConnected:
+
+                    sourcePlug = plug.source()
+                    sourcePlug.setBool(isChecked)
+
+                else:
+
+                    plug.setBool(isChecked)
+
+            elif detail == ViewDetail.FROZEN:
+
+                plug = plugutils.findPlug(node, 'template')
+
+                if plug.isConnected:
+
+                    sourcePlug = plug.source()
+                    sourcePlug.setBool(isChecked)
+
+                else:
+
+                    plug.setBool(isChecked)
+
+            else:
+
+                return False
+
+            return True
+
         else:
 
             return False
-
-        return True
 
     def data(self, index, role=None):
         """
