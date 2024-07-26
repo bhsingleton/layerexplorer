@@ -45,7 +45,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         self._viewDetails = [ViewDetail.NAME, ViewDetail.FROZEN, ViewDetail.PLAYBACK]
         self._headerLabels = [detail.name.title().replace('_', ' ') for detail in self._viewDetails]
         self._uniformRowHeight = kwargs.get('uniformRowHeight', 24.0)
-        self._showNamespaces = True
+        self._showNamespaces = kwargs.get('showNamespaces', True)
         self._layerManagers = deque()  # type: deque[int]
         self._displayLayers = defaultdict(deque)  # type: defaultdict[int, deque[int]]
         self._layerNodes = defaultdict(deque)  # type: defaultdict[int, deque[int]]
@@ -268,6 +268,11 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         if node.hasFn(om.MFn.kDagNode):
 
             displayLayer = layerutils.getLayerFromNode(node)
+
+            if displayLayer is None:
+
+                return QtCore.QModelIndex()
+
             layerNodes = self.getLayerNodes(displayLayer)
             layerNodeHashCode = dagutils.getMObjectHandle(node).hashCode()
             row = layerNodes.index(layerNodeHashCode)
@@ -277,6 +282,11 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         elif node.hasFn(om.MFn.kDisplayLayer):
 
             layerManager = layerutils.getManagerFromLayer(node)
+
+            if layerManager.isNull():
+
+                return QtCore.QModelIndex()
+
             displayLayers = self.getDisplayLayers(layerManager)
             displayLayerHashCode = dagutils.getMObjectHandle(node).hashCode()
             row = displayLayers.index(displayLayerHashCode)

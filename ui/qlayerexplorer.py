@@ -1,3 +1,4 @@
+from maya import cmds as mc
 from maya.api import OpenMaya as om
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import qsingletonwindow
@@ -36,6 +37,32 @@ def onSceneChanged(*args, **kwargs):
     else:
 
         log.warning('Unable to process scene changed callback!')
+
+
+def onSelectionChanged(*args, **kwargs):
+    """
+    Callback method for any scene IO changes.
+
+    :rtype: None
+    """
+
+    # Check if instance exists
+    #
+    instance = QLayerExplorer.getInstance()
+
+    if instance is None:
+
+        return
+
+    # Evaluate if instance is still valid
+    #
+    if QtCompat.isValid(instance):
+
+        instance.selectionChanged(*args, **kwargs)
+
+    else:
+
+        log.warning('Unable to process selection changed callback!')
 
 
 class QLayerExplorer(qsingletonwindow.QSingletonWindow):
@@ -104,6 +131,9 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         self.searchLineEdit = QtWidgets.QLineEdit()
         self.searchLineEdit.setObjectName('searchLineEdit')
         self.searchLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred))
+        self.searchLineEdit.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.searchLineEdit.setClearButtonEnabled(True)
+        self.searchLineEdit.textEdited.connect(self.on_searchLineEdit_textChanged)
 
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         sizePolicy.setHeightForWidth(True)
@@ -111,18 +141,26 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         self.moveLayerUpPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerUp.png'), '')
         self.moveLayerUpPushButton.setObjectName('moveLayerUpPushButton')
         self.moveLayerUpPushButton.setSizePolicy(sizePolicy)
+        self.moveLayerUpPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.moveLayerUpPushButton.clicked.connect(self.on_moveLayerUpPushButton_clicked)
 
         self.moveLayerDownPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerDown.png'), '')
         self.moveLayerDownPushButton.setObjectName('moveLayerDownPushButton')
         self.moveLayerDownPushButton.setSizePolicy(sizePolicy)
+        self.moveLayerDownPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.moveLayerDownPushButton.clicked.connect(self.on_moveLayerDownPushButton_clicked)
 
         self.createEmptyLayerPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newEmptyLayer.png'), '')
         self.createEmptyLayerPushButton.setObjectName('createEmptyLayerPushButton')
         self.createEmptyLayerPushButton.setSizePolicy(sizePolicy)
+        self.createEmptyLayerPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.createEmptyLayerPushButton.clicked.connect(self.on_createEmptyLayerPushButton_clicked)
 
         self.createLayerFromSelectedPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newLayer.png'), '')
         self.createLayerFromSelectedPushButton.setObjectName('createLayerFromSelectedPushButton')
         self.createLayerFromSelectedPushButton.setSizePolicy(sizePolicy)
+        self.createLayerFromSelectedPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
+        self.createLayerFromSelectedPushButton.clicked.connect(self.on_createLayerFromSelectedPushButton_clicked)
 
         self.interopLayout.addWidget(self.searchLineEdit)
         self.interopLayout.addWidget(self.moveLayerUpPushButton)
@@ -136,6 +174,18 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         #
         self.layerTreeView = QtWidgets.QTreeView()
         self.layerTreeView.setObjectName('layerTreeView')
+        self.layerTreeView.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.layerTreeView.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        self.layerTreeView.setEditTriggers(QtWidgets.QAbstractItemView.SelectedClicked)
+        self.layerTreeView.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.layerTreeView.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.layerTreeView.setDropIndicatorShown(False)
+        self.layerTreeView.setAlternatingRowColors(True)
+        self.layerTreeView.setRootIsDecorated(True)
+        self.layerTreeView.setUniformRowHeights(True)
+        self.layerTreeView.setAnimated(False)
+        self.layerTreeView.setExpandsOnDoubleClick(False)
+        self.layerTreeView.header().setMinimumSectionSize(50)
 
         self.layerItemModel = qlayeritemmodel.QLayerItemModel(parent=self.layerTreeView)
         self.layerItemModel.setObjectName('layerItemModel')
@@ -145,10 +195,7 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         self.layerItemFilterModel.setObjectName('layerItemFilterModel')
         self.layerItemFilterModel.setSourceModel(self.layerItemModel)
 
-        self.searchLineEdit.textEdited.connect(self.layerItemFilterModel.setFilterWildcard)
-
         self.layerTreeView.setModel(self.layerItemFilterModel)
-        self.layerTreeView.setSortingEnabled(True)
         self.layerTreeView.sortByColumn(0, QtCore.Qt.AscendingOrder)
 
         self.styledLayerItemDelegate = qstyledlayeritemdelegate.QStyledLayerItemDelegate(parent=self.layerTreeView)
@@ -176,52 +223,64 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
 
         self.createEmptyLayerAction = QtWidgets.QAction('Create Empty Layer', parent=self.layersMenu)
         self.createEmptyLayerAction.setObjectName('createEmptyLayerAction')
+        self.createEmptyLayerAction.triggered.connect(self.on_createEmptyLayerAction_triggered)
 
         self.createLayerFromSelectedAction = QtWidgets.QAction('Create Layer From Selected', parent=self.layersMenu)
         self.createLayerFromSelectedAction.setObjectName('createLayerFromSelectedAction')
+        self.createLayerFromSelectedAction.triggered.connect(self.on_createLayerFromSelectedAction_triggered)
 
         self.selectObjectsInSelectedLayersAction = QtWidgets.QAction('Select Objects in Selected Layers', parent=self.layersMenu)
         self.selectObjectsInSelectedLayersAction.setObjectName('selectObjectsInSelectedLayersAction')
+        self.selectObjectsInSelectedLayersAction.triggered.connect(self.on_selectObjectsInSelectedLayersAction_triggered)
 
         self.removeSelectedObjectsFromSelectedLayersAction = QtWidgets.QAction('Removed Selected Objects from Selected Layers', parent=self.layersMenu)
         self.removeSelectedObjectsFromSelectedLayersAction.setObjectName('removeSelectedObjectsFromSelectedLayersAction')
+        self.removeSelectedObjectsFromSelectedLayersAction.triggered.connect(self.on_removeSelectedObjectsFromSelectedLayersAction_triggered)
 
         self.membershipAction = QtWidgets.QAction('Membership', parent=self.layersMenu)
         self.membershipAction.setObjectName('membershipAction')
+        self.membershipAction.triggered.connect(self.on_membershipAction_triggered)
 
         self.attributesAction = QtWidgets.QAction('Attributes', parent=self.layersMenu)
         self.attributesAction.setObjectName('attributesAction')
+        self.attributesAction.triggered.connect(self.on_attributesAction_triggered)
 
         self.deleteSelectedLayersAction = QtWidgets.QAction('Delete Selected Layers', parent=self.layersMenu)
         self.deleteSelectedLayersAction.setObjectName('deleteSelectedLayersAction')
+        self.deleteSelectedLayersAction.triggered.connect(self.on_deleteSelectedLayersAction_triggered)
 
         self.deleteUnusedLayersAction = QtWidgets.QAction('Delete Unused Layers', parent=self.layersMenu)
         self.deleteUnusedLayersAction.setObjectName('deleteUnusedLayersAction')
+        self.deleteUnusedLayersAction.triggered.connect(self.on_deleteUnusedLayersAction_triggered)
 
         self.setAllLayersAction = QtWidgets.QAction('Set All Layers', parent=self.layersMenu)
         self.setAllLayersAction.setObjectName('setAllLayersAction')
+        self.setAllLayersAction.triggered.connect(self.on_setAllLayersAction_triggered)
 
         self.setSelectedLayersAction = QtWidgets.QAction('Set Selected Layers', parent=self.layersMenu)
         self.setSelectedLayersAction.setObjectName('setSelectedLayersAction')
+        self.setSelectedLayersAction.triggered.connect(self.on_setSelectedLayersAction_triggered)
 
         self.setOnlySelectedLayersAction = QtWidgets.QAction('Set Only Selected Layers', parent=self.layersMenu)
         self.setOnlySelectedLayersAction.setObjectName('setOnlySelectedLayersAction')
+        self.setOnlySelectedLayersAction.triggered.connect(self.on_setOnlySelectedLayersAction_triggered)
 
         self.chronologicallyAction = QtWidgets.QAction('Chronologically', parent=self.layersMenu)
         self.chronologicallyAction.setObjectName('chronologicallyAction')
         self.chronologicallyAction.setCheckable(True)
+        self.chronologicallyAction.triggered.connect(self.on_chronologicallyAction_triggered)
 
         self.alphabeticallyAction = QtWidgets.QAction('Alphabetically', parent=self.layersMenu)
         self.alphabeticallyAction.setObjectName('alphabeticallyAction')
         self.alphabeticallyAction.setCheckable(True)
         self.alphabeticallyAction.setChecked(True)
-        self.alphabeticallyAction.triggered.connect(self.layerTreeView.setSortingEnabled)
+        self.alphabeticallyAction.triggered.connect(self.on_alphabeticallyAction_triggered)
 
         self.layerSortingActionGroup = QtWidgets.QActionGroup(self.layersMenu)
         self.layerSortingActionGroup.setObjectName('layerSortingActionGroup')
+        self.layerSortingActionGroup.setExclusive(True)
         self.layerSortingActionGroup.addAction(self.chronologicallyAction)
         self.layerSortingActionGroup.addAction(self.alphabeticallyAction)
-        self.layerSortingActionGroup.setExclusive(True)
 
         self.layersMenu.addActions([self.createEmptyLayerAction, self.createLayerFromSelectedAction])
         self.layersMenu.addSeparator()
@@ -243,18 +302,23 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         self.makeNewLayersCurrentAction = QtWidgets.QAction('Make New Layers Current', parent=self.optionsMenu)
         self.makeNewLayersCurrentAction.setObjectName('makeNewLayersCurrentAction')
         self.makeNewLayersCurrentAction.setCheckable(True)
+        self.makeNewLayersCurrentAction.triggered.connect(self.on_makeNewLayersCurrentAction_triggered)
 
         self.addNewObjectsToCurrentLayerAction = QtWidgets.QAction('Add New Objects to Current Layer', parent=self.optionsMenu)
         self.addNewObjectsToCurrentLayerAction.setObjectName('addNewObjectsToCurrentLayerAction')
         self.addNewObjectsToCurrentLayerAction.setCheckable(True)
+        self.addNewObjectsToCurrentLayerAction.triggered.connect(self.on_addNewObjectsToCurrentLayerAction_triggered)
 
         self.autoOverridesAction = QtWidgets.QAction('Auto Overrides', parent=self.optionsMenu)
         self.autoOverridesAction.setObjectName('autoOverridesAction')
         self.autoOverridesAction.setCheckable(True)
+        self.autoOverridesAction.triggered.connect(self.on_autoOverridesAction_triggered)
 
         self.showNamespaceAction = QtWidgets.QAction('Show Namespace', parent=self.optionsMenu)
         self.showNamespaceAction.setObjectName('showNamespaceAction')
         self.showNamespaceAction.setCheckable(True)
+        self.showNamespaceAction.setChecked(True)
+        self.showNamespaceAction.triggered.connect(self.on_showNamespaceAction_triggered)
 
         self.optionsMenu.addActions([self.makeNewLayersCurrentAction, self.addNewObjectsToCurrentLayerAction, self.autoOverridesAction, self.showNamespaceAction])
 
@@ -265,6 +329,7 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
 
         self.helpOnDisplayLayersAction = QtWidgets.QAction('Help on Display Layers', parent=self.helpMenu)
         self.helpOnDisplayLayersAction.setObjectName('helpOnDisplayLayersAction')
+        self.helpOnDisplayLayersAction.triggered.connect(self.on_helpOnDisplayLayersAction_triggered)
 
         self.helpMenu.addAction(self.helpOnDisplayLayersAction)
     # endregion
@@ -272,13 +337,23 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
     # region Callbacks
     def sceneChanged(self, *args, **kwargs):
         """
-        Notifies all tabs of a scene change.
+        Notifies layer item model of a scene change.
 
         :key clientData: Any
         :rtype: None
         """
 
         self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
+
+    def selectionChanged(self, *args, **kwargs):
+        """
+        Notifies layer selection model of a selection change.
+
+        :key clientData: Any
+        :rtype: None
+        """
+
+        self.synchronizeSelection()
     # endregion
 
     # region Methods
@@ -298,7 +373,12 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
             callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
             self._callbackIds.append(callbackId)
 
-            self.sceneChanged()
+            callbackId = om.MEventMessage.addEventCallback('SelectionChanged', onSelectionChanged)
+            self._callbackIds.append(callbackId)
+
+        # Force scene update
+        #
+        self.sceneChanged()
 
     def removeCallbacks(self):
         """
@@ -315,31 +395,41 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
 
             om.MMessage.removeCallbacks(self._callbackIds)
             self._callbackIds.clear()
+
+    def synchronizeSelection(self):
+        """
+        Synchronizes the layer selection model with the scene selection.
+
+        :rtype: None
+        """
+
+        # Get associated item indices
+        #
+        selection = dagutils.getActiveSelection(apiType=om.MFn.kDagNode)
+        items = QtCore.QItemSelection()
+
+        for selectedNode in selection:
+
+            sourceIndex = self.layerItemModel.indexFromNode(selectedNode)
+            index = self.layerItemFilterModel.mapFromSource(sourceIndex)
+
+            if index.isValid():
+
+                items.select(index, index)
+
+            else:
+
+                continue
+
+        # Update layer selection model
+        #
+        with qsignalblocker.QSignalBlocker(self.layerSelectionModel):
+
+            self.layerSelectionModel.select(items, QtCore.QItemSelectionModel.ClearAndSelect)
+
     # endregion
 
     # region Slots
-    @QtCore.Slot(bool)
-    def on_chronologicallyAction_triggered(self, checked=False):
-        """
-        Slot method for the `chronologicallyAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.layerTreeView.setSortingEnabled(not checked)
-
-    @QtCore.Slot(bool)
-    def on_alphabeticallyAction_triggered(self, checked=False):
-        """
-        Slot method for the `alphabeticallyAction` widget's `triggered` signal.
-
-        :type checked: bool
-        :rtype: None
-        """
-
-        self.layerTreeView.setSortingEnabled(checked)
-
     @QtCore.Slot(QtCore.QModelIndex, QtCore.QModelIndex, list)
     def on_layerItemModel_dataChanged(self, topLeft, bottomRight, roles=None):
         """
@@ -430,4 +520,253 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         # Update active selection
         #
         om.MGlobal.setActiveSelectionList(selectionList)
+
+    @QtCore.Slot(str)
+    def on_searchLineEdit_textChanged(self, text):
+        """
+        Slot method for the `searchLineEdit` widget's `textChanged` signal.
+
+        :type text: str
+        :rtype: None
+        """
+
+        self.layerItemFilterModel.setFilterWildcard(text)
+
+    @QtCore.Slot()
+    def on_moveLayerUpPushButton_clicked(self):
+        """
+        Slot method for the `moveLayerUpPushButton` widget's `clicked` signal.
+
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_moveLayerDownPushButton_clicked(self):
+        """
+        Slot method for the `moveLayerDownPushButton` widget's `clicked` signal.
+
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_createEmptyLayerPushButton_clicked(self):
+        """
+        Slot method for the `createEmptyLayerPushButton` widget's `clicked` signal.
+
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_createLayerFromSelectedPushButton_clicked(self):
+        """
+        Slot method for the `createLayerFromSelectedPushButton` widget's `clicked` signal.
+
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_createEmptyLayerAction_triggered(self, checked=False):
+        """
+        Slot method for the `createEmptyLayerAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_createLayerFromSelectedAction_triggered(self, checked=False):
+        """
+        Slot method for the `createLayerFromSelectedAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_selectObjectsInSelectedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `selectObjectsInSelectedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_removeSelectedObjectsFromSelectedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `removeSelectedObjectsFromSelectedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_membershipAction_triggered(self, checked=False):
+        """
+        Slot method for the `membershipAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_attributesAction_triggered(self, checked=False):
+        """
+        Slot method for the `attributesAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_deleteSelectedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `deleteSelectedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_deleteUnusedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `deleteUnusedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_setAllLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `setAllLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_setSelectedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `setSelectedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot()
+    def on_setOnlySelectedLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `setOnlySelectedLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_chronologicallyAction_triggered(self, checked=False):
+        """
+        Slot method for the `chronologicallyAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerTreeView.setSortingEnabled(not checked)
+
+    @QtCore.Slot(bool)
+    def on_alphabeticallyAction_triggered(self, checked=False):
+        """
+        Slot method for the `alphabeticallyAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerTreeView.setSortingEnabled(checked)
+
+    @QtCore.Slot(bool)
+    def on_makeNewLayersCurrentAction_triggered(self, checked=False):
+        """
+        Slot method for the `makeNewLayersCurrentAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_addNewObjectsToCurrentLayerAction_triggered(self, checked=False):
+        """
+        Slot method for the `addNewObjectsToCurrentLayerAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_autoOverridesAction_triggered(self, checked=False):
+        """
+        Slot method for the `autoOverridesAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        pass
+
+    @QtCore.Slot(bool)
+    def on_showNamespaceAction_triggered(self, checked=False):
+        """
+        Slot method for the `showNamespaceAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerItemModel.setShowNamespaces(checked)
+
+    @QtCore.Slot(bool)
+    def on_helpOnDisplayLayersAction_triggered(self, checked=False):
+        """
+        Slot method for the `helpOnDisplayLayersAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        mc.showHelp('DisplayLayer')
     # endregion
