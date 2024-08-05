@@ -27,6 +27,12 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
     """
 
     # region Dunderscores
+    __icons__ = {
+        'displayLayerManager': QtGui.QIcon(':/out_reference.png'),
+        'displayLayer': QtGui.QIcon(':/out_displayLayer.png'),
+        'transform': QtGui.QIcon(':/out_transform.png')
+    }
+
     def __init__(self, **kwargs):
         """
         Private method called after a new instance has been created.
@@ -619,12 +625,27 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         :rtype: Union[QtGui.QIcon, None]
         """
 
+        # Evaluate requested column
+        #
         if detail == ViewDetail.NAME:
 
-            isLayerManager = node.hasFn(om.MFn.kDisplayLayerManager)
-            iconPath = ':/out_reference.png' if isLayerManager else f':/out_{om.MFnDependencyNode(node).typeName}.png'
+            # Check if icon already exists
+            #
+            fnDependNode = om.MFnDependencyNode(node)
+            typeName = str(fnDependNode.typeName)
 
-            return QtGui.QIcon(iconPath)
+            icon = self.__icons__.get(typeName, None)
+
+            if isinstance(icon, QtGui.QIcon):
+
+                return icon
+
+            # Search for icon
+            #
+            icon = dagutils.getNodeIcon(node, forOutliner=True)
+            self.__icons__[typeName] = icon
+
+            return icon
 
         else:
 
@@ -744,13 +765,23 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
             if detail == ViewDetail.NAME:
 
+                plug = plugutils.findPlug(node, 'visibility')
+                plug.setBool(isChecked)
+
                 mc.layerButton(buttonName, edit=True, layerVisible=isChecked)
 
             elif detail == ViewDetail.PLAYBACK:
 
+                plug = plugutils.findPlug(node, 'hideOnPlayback')
+                plug.setBool(isChecked)
+
                 mc.layerButton(buttonName, edit=True, layerHideOnPlayback=isChecked)
 
             elif detail == ViewDetail.FROZEN:
+
+                displayType = 2 if isChecked else 0
+                plug = plugutils.findPlug(node, 'displayType')
+                plug.setInt(isChecked)
 
                 layerState = 'reference' if isChecked else 'normal'
                 mc.layerButton(buttonName, edit=True, layerState=layerState)
