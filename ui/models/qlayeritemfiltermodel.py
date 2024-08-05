@@ -30,6 +30,29 @@ class QLayerItemFilterModel(QtCore.QSortFilterProxyModel):
         # Declare private variables
         #
         self._hideDefaultLayer = kwargs.get('hideDefaultLayer', True)
+        self._hideNodes = kwargs.get('hideNodes', False)
+    # endregion
+
+    # region Mutators
+    def hideNodes(self):
+        """
+        Returns the `hideNodes` state.
+
+        :rtype: bool
+        """
+
+        return self._hideNodes
+
+    def setHideNodes(self, hideNodes):
+        """
+        Updates the `hideNodes` state.
+
+        :type hideNodes: bool
+        :rtype: None
+        """
+
+        self._hideNodes = hideNodes
+        self.invalidateFilter()
     # endregion
 
     # region Methods
@@ -70,7 +93,13 @@ class QLayerItemFilterModel(QtCore.QSortFilterProxyModel):
 
         else:
 
-            # Call parent method
+            # Check if nodes should be hidden
             #
-            return super(QLayerItemFilterModel, self).filterAcceptsRow(row, parent)
+            if self._hideNodes:
+
+                return False
+
+            else:
+
+                return super(QLayerItemFilterModel, self).filterAcceptsRow(row, parent)
     # endregion

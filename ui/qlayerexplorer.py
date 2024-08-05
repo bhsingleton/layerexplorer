@@ -1,5 +1,6 @@
 from maya import cmds as mc
 from maya.api import OpenMaya as om
+from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import qsingletonwindow
 from dcc.maya.libs import dagutils
@@ -65,7 +66,7 @@ def onSelectionChanged(*args, **kwargs):
         log.warning('Unable to process selection changed callback!')
 
 
-class QLayerExplorer(qsingletonwindow.QSingletonWindow):
+class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow):
     """
     Overload of `QSingletonWindow` that interfaces with display layers.
     """
@@ -320,7 +321,21 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         self.showNamespaceAction.setChecked(True)
         self.showNamespaceAction.triggered.connect(self.on_showNamespaceAction_triggered)
 
-        self.optionsMenu.addActions([self.makeNewLayersCurrentAction, self.addNewObjectsToCurrentLayerAction, self.autoOverridesAction, self.showNamespaceAction])
+        self.showNodesAction = QtWidgets.QAction('Show Nodes', parent=self.optionsMenu)
+        self.showNodesAction.setObjectName('showNamespaceAction')
+        self.showNodesAction.setCheckable(True)
+        self.showNodesAction.setChecked(True)
+        self.showNodesAction.triggered.connect(self.on_showNodesAction_triggered)
+
+        self.optionsMenu.addActions(
+            [
+                self.makeNewLayersCurrentAction,
+                self.addNewObjectsToCurrentLayerAction,
+                self.autoOverridesAction,
+                self.showNamespaceAction,
+                self.showNodesAction
+            ]
+        )
 
         # Initialize help menu actions
         #
@@ -405,7 +420,7 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
 
         # Get associated item indices
         #
-        selection = dagutils.getActiveSelection(apiType=om.MFn.kDagNode)
+        selection = dagutils.getActiveSelection(apiType=om.MFn.kDependencyNode)
         items = QtCore.QItemSelection()
 
         for selectedNode in selection:
@@ -415,7 +430,7 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
 
             if index.isValid():
 
-                items.select(index, index)
+                items.select(index, index.siblingAtColumn(self.layerItemModel.columnCount() - 1))
 
             else:
 
@@ -758,6 +773,17 @@ class QLayerExplorer(qsingletonwindow.QSingletonWindow):
         """
 
         self.layerItemModel.setShowNamespaces(checked)
+
+    @QtCore.Slot(bool)
+    def on_showNodesAction_triggered(self, checked=False):
+        """
+        Slot method for the `showNodesAction` widget's `triggered` signal.
+
+        :type checked: bool
+        :rtype: None
+        """
+
+        self.layerItemFilterModel.setHideNodes(not checked)
 
     @QtCore.Slot(bool)
     def on_helpOnDisplayLayersAction_triggered(self, checked=False):
