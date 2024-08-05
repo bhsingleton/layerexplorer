@@ -95,14 +95,14 @@ class QStyledLayerItemDelegate(QtWidgets.QStyledItemDelegate):
         elif isFrozenColumn or isPlaybackColumn:
 
             isChecked = option.checkState == QtCore.Qt.Checked
-            isOpen = option.state & QtWidgets.QStyle.State_Open
+            isActive = (isFrozenColumn and isChecked) or (isPlaybackColumn and not isChecked)
 
             checkBoxRect = style.subElementRect(QtWidgets.QStyle.SE_ItemViewItemCheckIndicator, option, option.widget)
             option.rect = QtWidgets.QStyle.alignedRect(option.direction, QtCore.Qt.Alignment(index.data(role=QtCore.Qt.TextAlignmentRole)), checkBoxRect.size(), option.rect)
             option.state = option.state & ~QtWidgets.QStyle.State_HasFocus
 
-            mode = QtGui.QIcon.Normal if isChecked else QtGui.QIcon.Disabled
-            state = QtGui.QIcon.On if isOpen else QtGui.QIcon.Off
+            mode = QtGui.QIcon.Normal if isActive else QtGui.QIcon.Disabled
+            state = QtGui.QIcon.On if isActive else QtGui.QIcon.Off
             checkBoxIcon = self.__checkbox_icons__[detail]
 
             checkBoxIcon.paint(painter, option.rect, QtCore.Qt.AlignCenter, mode, state)
