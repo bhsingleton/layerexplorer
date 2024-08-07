@@ -136,30 +136,31 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         self.searchLineEdit.setClearButtonEnabled(True)
         self.searchLineEdit.textEdited.connect(self.on_searchLineEdit_textChanged)
 
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
-        sizePolicy.setHeightForWidth(True)
-
         self.moveLayerUpPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerUp.png'), '')
         self.moveLayerUpPushButton.setObjectName('moveLayerUpPushButton')
-        self.moveLayerUpPushButton.setSizePolicy(sizePolicy)
+        self.moveLayerUpPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
+        self.moveLayerUpPushButton.setMinimumWidth(24)
         self.moveLayerUpPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.moveLayerUpPushButton.clicked.connect(self.on_moveLayerUpPushButton_clicked)
 
         self.moveLayerDownPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerDown.png'), '')
         self.moveLayerDownPushButton.setObjectName('moveLayerDownPushButton')
-        self.moveLayerDownPushButton.setSizePolicy(sizePolicy)
+        self.moveLayerDownPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
+        self.moveLayerDownPushButton.setMinimumWidth(24)
         self.moveLayerDownPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.moveLayerDownPushButton.clicked.connect(self.on_moveLayerDownPushButton_clicked)
 
         self.createEmptyLayerPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newEmptyLayer.png'), '')
         self.createEmptyLayerPushButton.setObjectName('createEmptyLayerPushButton')
-        self.createEmptyLayerPushButton.setSizePolicy(sizePolicy)
+        self.createEmptyLayerPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
+        self.createEmptyLayerPushButton.setMinimumWidth(24)
         self.createEmptyLayerPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.createEmptyLayerPushButton.clicked.connect(self.on_createEmptyLayerPushButton_clicked)
 
         self.createLayerFromSelectedPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newLayer.png'), '')
         self.createLayerFromSelectedPushButton.setObjectName('createLayerFromSelectedPushButton')
-        self.createLayerFromSelectedPushButton.setSizePolicy(sizePolicy)
+        self.createLayerFromSelectedPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
+        self.createLayerFromSelectedPushButton.setMinimumWidth(24)
         self.createLayerFromSelectedPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.createLayerFromSelectedPushButton.clicked.connect(self.on_createLayerFromSelectedPushButton_clicked)
 
