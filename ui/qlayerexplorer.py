@@ -5,6 +5,7 @@ from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import qsingletonwindow
 from dcc.maya.libs import dagutils
 from dcc.ui import qsignalblocker
+from functools import partial
 from . import resources
 from .models import qlayeritemmodel, qlayeritemfiltermodel, qstyledlayeritemdelegate
 
@@ -16,7 +17,7 @@ log.setLevel(logging.INFO)
 
 def onSceneOpening(*args, **kwargs):
     """
-    Callback method for any scene IO delegation.
+    Callback method for any pre-scene open delegation.
 
     :rtype: None
     """
@@ -42,7 +43,7 @@ def onSceneOpening(*args, **kwargs):
 
 def onSceneOpened(*args, **kwargs):
     """
-    Callback method for any scene IO delegation.
+    Callback method for any post-scene openi delegation.
 
     :rtype: None
     """
@@ -59,7 +60,7 @@ def onSceneOpened(*args, **kwargs):
     #
     if QtCompat.isValid(instance):
 
-        instance.sceneOpened(*args, **kwargs)
+        mc.evalDeferred(partial(instance.sceneOpened, *args, **kwargs))  # Allows scene to fully load before processing changes!
 
     else:
 
@@ -379,7 +380,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :rtype: None
         """
 
-        log.debug('Clearing internal display layer trackers...')
+        log.debug('Clearing internal display layer trackers!')
         self.layerItemModel.setLayerManagers([])
 
     def sceneOpened(self, *args, **kwargs):
@@ -389,7 +390,6 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :key clientData: Any
         :rtype: None
         """
-
 
         displayLayerManagers = list(dagutils.iterNodes(om.MFn.kDisplayLayerManager))
         log.debug(f'Updating display layer managers: {displayLayerManagers}')
