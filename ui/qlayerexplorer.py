@@ -14,9 +14,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-def onSceneChanged(*args, **kwargs):
+def onSceneOpening(*args, **kwargs):
     """
-    Callback method for any scene IO changes.
+    Callback method for any scene IO delegation.
 
     :rtype: None
     """
@@ -33,7 +33,33 @@ def onSceneChanged(*args, **kwargs):
     #
     if QtCompat.isValid(instance):
 
-        instance.sceneChanged(*args, **kwargs)
+        instance.sceneOpening(*args, **kwargs)
+
+    else:
+
+        log.warning('Unable to process scene changed callback!')
+
+
+def onSceneOpened(*args, **kwargs):
+    """
+    Callback method for any scene IO delegation.
+
+    :rtype: None
+    """
+
+    # Check if instance exists
+    #
+    instance = QLayerExplorer.getInstance()
+
+    if instance is None:
+
+        return
+
+    # Evaluate if instance is still valid
+    #
+    if QtCompat.isValid(instance):
+
+        instance.sceneOpened(*args, **kwargs)
 
     else:
 
@@ -42,7 +68,7 @@ def onSceneChanged(*args, **kwargs):
 
 def onSelectionChanged(*args, **kwargs):
     """
-    Callback method for any scene IO changes.
+    Callback method for any selection delegation.
 
     :rtype: None
     """
@@ -119,58 +145,52 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
         # Initialize interop widget
         #
-        self.interopLayout = QtWidgets.QHBoxLayout()
-        self.interopLayout.setObjectName('interopLayout')
-        self.interopLayout.setContentsMargins(0, 0, 0, 0)
-
-        self.interopWidget = QtWidgets.QWidget()
-        self.interopWidget.setObjectName('interopWidget')
-        self.interopWidget.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
-        self.interopWidget.setFixedHeight(24)
-        self.interopWidget.setLayout(self.interopLayout)
-
         self.searchLineEdit = QtWidgets.QLineEdit()
         self.searchLineEdit.setObjectName('searchLineEdit')
-        self.searchLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred))
+        self.searchLineEdit.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed))
+        self.searchLineEdit.setFixedHeight(24)
         self.searchLineEdit.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.searchLineEdit.setClearButtonEnabled(True)
         self.searchLineEdit.textEdited.connect(self.on_searchLineEdit_textChanged)
 
         self.moveLayerUpPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerUp.png'), '')
         self.moveLayerUpPushButton.setObjectName('moveLayerUpPushButton')
-        self.moveLayerUpPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
-        self.moveLayerUpPushButton.setMinimumWidth(24)
+        self.moveLayerUpPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
+        self.moveLayerUpPushButton.setFixedSize(QtCore.QSize(24, 24))
         self.moveLayerUpPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.moveLayerUpPushButton.clicked.connect(self.on_moveLayerUpPushButton_clicked)
 
         self.moveLayerDownPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/moveLayerDown.png'), '')
         self.moveLayerDownPushButton.setObjectName('moveLayerDownPushButton')
-        self.moveLayerDownPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
-        self.moveLayerDownPushButton.setMinimumWidth(24)
+        self.moveLayerDownPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
+        self.moveLayerDownPushButton.setFixedSize(QtCore.QSize(24, 24))
         self.moveLayerDownPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.moveLayerDownPushButton.clicked.connect(self.on_moveLayerDownPushButton_clicked)
 
         self.createEmptyLayerPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newEmptyLayer.png'), '')
         self.createEmptyLayerPushButton.setObjectName('createEmptyLayerPushButton')
-        self.createEmptyLayerPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
-        self.createEmptyLayerPushButton.setMinimumWidth(24)
+        self.createEmptyLayerPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
+        self.createEmptyLayerPushButton.setFixedSize(QtCore.QSize(24, 24))
         self.createEmptyLayerPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.createEmptyLayerPushButton.clicked.connect(self.on_createEmptyLayerPushButton_clicked)
 
         self.createLayerFromSelectedPushButton = QtWidgets.QPushButton(QtGui.QIcon(':/layerExplorer/icons/newLayer.png'), '')
         self.createLayerFromSelectedPushButton.setObjectName('createLayerFromSelectedPushButton')
-        self.createLayerFromSelectedPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Preferred))
-        self.createLayerFromSelectedPushButton.setMinimumWidth(24)
+        self.createLayerFromSelectedPushButton.setSizePolicy(QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed))
+        self.createLayerFromSelectedPushButton.setFixedSize(QtCore.QSize(24, 24))
         self.createLayerFromSelectedPushButton.setFocusPolicy(QtCore.Qt.NoFocus)
         self.createLayerFromSelectedPushButton.clicked.connect(self.on_createLayerFromSelectedPushButton_clicked)
 
-        self.interopLayout.addWidget(self.searchLineEdit)
-        self.interopLayout.addWidget(self.moveLayerUpPushButton)
-        self.interopLayout.addWidget(self.moveLayerDownPushButton)
-        self.interopLayout.addWidget(self.createEmptyLayerPushButton)
-        self.interopLayout.addWidget(self.createLayerFromSelectedPushButton)
+        self.buttonsLayout = QtWidgets.QHBoxLayout()
+        self.buttonsLayout.setObjectName('buttonsLayout')
+        self.buttonsLayout.setContentsMargins(0, 0, 0, 0)
+        self.buttonsLayout.addWidget(self.searchLineEdit)
+        self.buttonsLayout.addWidget(self.moveLayerUpPushButton)
+        self.buttonsLayout.addWidget(self.moveLayerDownPushButton)
+        self.buttonsLayout.addWidget(self.createEmptyLayerPushButton)
+        self.buttonsLayout.addWidget(self.createLayerFromSelectedPushButton)
 
-        centralLayout.addWidget(self.interopWidget)
+        centralLayout.addLayout(self.buttonsLayout)
 
         # Initialize layer tree view
         #
@@ -351,15 +371,30 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
     # endregion
 
     # region Callbacks
-    def sceneChanged(self, *args, **kwargs):
+    def sceneOpening(self, *args, **kwargs):
         """
-        Notifies layer item model of a scene change.
+        Notifies the layer item model that a new scene is being opened.
 
         :key clientData: Any
         :rtype: None
         """
 
-        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
+        log.debug('Clearing internal display layer trackers...')
+        self.layerItemModel.setLayerManagers([])
+
+    def sceneOpened(self, *args, **kwargs):
+        """
+        Notifies the layer item model that a new scene has been opened.
+
+        :key clientData: Any
+        :rtype: None
+        """
+
+
+        displayLayerManagers = list(dagutils.iterNodes(om.MFn.kDisplayLayerManager))
+        log.debug(f'Updating display layer managers: {displayLayerManagers}')
+
+        self.layerItemModel.setLayerManagers(displayLayerManagers)
 
     def selectionChanged(self, *args, **kwargs):
         """
@@ -386,7 +421,13 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
         if not hasCallbacks:
 
-            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen, onSceneChanged)
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kBeforeNew, onSceneOpening)
+            self._callbackIds.append(callbackId)
+
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kBeforeOpen, onSceneOpening)
+            self._callbackIds.append(callbackId)
+
+            callbackId = om.MSceneMessage.addCallback(om.MSceneMessage.kSceneUpdate, onSceneOpened)
             self._callbackIds.append(callbackId)
 
             callbackId = om.MEventMessage.addEventCallback('SelectionChanged', onSelectionChanged)
@@ -394,7 +435,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
         # Force scene update
         #
-        self.sceneChanged()
+        self.sceneOpened()
 
     def removeCallbacks(self):
         """
@@ -442,7 +483,6 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         with qsignalblocker.QSignalBlocker(self.layerSelectionModel):
 
             self.layerSelectionModel.select(items, QtCore.QItemSelectionModel.ClearAndSelect)
-
     # endregion
 
     # region Slots
