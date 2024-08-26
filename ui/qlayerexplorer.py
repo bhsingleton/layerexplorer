@@ -380,8 +380,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :rtype: None
         """
 
-        log.debug('Clearing internal display layer trackers!')
-        self.layerItemModel.setLayerManagers([])
+        self.clearDisplayLayerManagers()
 
     def sceneOpened(self, *args, **kwargs):
         """
@@ -391,10 +390,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :rtype: None
         """
 
-        displayLayerManagers = list(dagutils.iterNodes(om.MFn.kDisplayLayerManager))
-        log.debug(f'Updating display layer managers: {displayLayerManagers}')
-
-        self.layerItemModel.setLayerManagers(displayLayerManagers)
+        self.refreshDisplayLayerManagers()
 
     def selectionChanged(self, *args, **kwargs):
         """
@@ -435,7 +431,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
         # Force scene update
         #
-        self.sceneOpened()
+        self.refreshDisplayLayerManagers()
 
     def removeCallbacks(self):
         """
@@ -452,6 +448,25 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
             om.MMessage.removeCallbacks(self._callbackIds)
             self._callbackIds.clear()
+
+    def clearDisplayLayerManagers(self):
+        """
+        Clears all display-layer managers from the tree view.
+
+        :rtype: None
+        """
+
+        self.layerItemModel.setLayerManagers([])
+
+    def refreshDisplayLayerManagers(self):
+        """
+        Refreshes the display-layer managers in the tree view.
+
+        :rtype: None
+        """
+
+        displayLayerManagers = list(dagutils.iterNodes(om.MFn.kDisplayLayerManager))
+        self.layerItemModel.setLayerManagers(displayLayerManagers)
 
     def synchronizeSelection(self):
         """
