@@ -745,7 +745,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         Updates the check-state for the supplied node for the specified detail.
 
         :type node: om.MObject
-        :type checkState: QtCore.Qt.CheckState
+        :type checkState: Union[int, QtCore.Qt.CheckState]
         :type detail: ViewDetail
         :rtype: bool
         """
@@ -755,7 +755,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
         isLayer = node.hasFn(om.MFn.kDisplayLayer)
         isNode = node.hasFn(om.MFn.kDagNode)
 
-        isChecked = checkState == QtCore.Qt.Checked
+        isChecked = QtCore.Qt.CheckState(checkState) == QtCore.Qt.Checked
 
         if isLayer:
 
@@ -781,7 +781,7 @@ class QLayerItemModel(QtCore.QAbstractItemModel):
 
                 displayType = 2 if isChecked else 0
                 plug = plugutils.findPlug(node, 'displayType')
-                plug.setInt(isChecked)
+                plug.setInt(displayType)
 
                 layerState = 'reference' if isChecked else 'normal'
                 mc.layerButton(buttonName, edit=True, layerState=layerState)

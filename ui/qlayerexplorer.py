@@ -514,7 +514,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
 
         # Evaluate data role
         #
-        role = roles[0] if len(roles) == 1 else None
+        role = QtCore.Qt.ItemDataRole(roles[0]) if len(roles) == 1 else None
 
         if role != QtCore.Qt.CheckStateRole:
 
