@@ -13,7 +13,7 @@ Features:
 
 Roadmap:  
 - Implement logic for menu-bar actions and layer interop buttons.
-- Add columns for playback and display type toggling.
+- ~~Add columns for playback and display type toggling.~~
   
 ### How to open:
 
