@@ -3,7 +3,8 @@ from maya.api import OpenMaya as om
 from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
 from Qt import QtCore, QtWidgets, QtGui, QtCompat
 from dcc.ui import qsingletonwindow
-from dcc.maya.libs import dagutils
+from dcc.maya.libs import dagutils, layerutils
+from dcc.maya.decorators import undo
 from dcc.ui import qsignalblocker
 from functools import partial
 from . import resources
@@ -465,8 +466,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :rtype: None
         """
 
-        displayLayerManagers = list(dagutils.iterNodes(om.MFn.kDisplayLayerManager))
-        self.layerItemModel.setLayerManagers(displayLayerManagers)
+        self.layerItemModel.setLayerManagers(list(dagutils.iterNodes(om.MFn.kDisplayLayerManager)))
 
     def synchronizeSelection(self):
         """
@@ -498,6 +498,39 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         with qsignalblocker.QSignalBlocker(self.layerSelectionModel):
 
             self.layerSelectionModel.select(items, QtCore.QItemSelectionModel.ClearAndSelect)
+
+    def selectedDisplayLayers(self):
+        """
+        Returns the selected display layers.
+
+        :rtype: List[om.MObject]
+        """
+
+        return list(dagutils.iterActiveSelection(om.MFn.kDisplayLayer))
+
+    @undo.Undo(name='Select Objects in Selected Layers')
+    def selectObjectsInSelectedLayers(self):
+        """
+        Selects the nodes from the current selected layers.
+
+        :rtype: None
+        """
+
+        # Evaluate layer selection
+        #
+        layers = self.selectedDisplayLayers()
+        numLayers = len(layers)
+        
+        if numLayers == 0:
+
+            return
+
+        # Create selection list form layer nodes
+        #
+        nodes = list(layerutils.iterNodesFromLayers(*layers))
+        selectionList = dagutils.createSelectionList(nodes)
+
+        om.MGlobal.setActiveSelectionList(selectionList)
     # endregion
 
     # region Slots
@@ -674,7 +707,7 @@ class QLayerExplorer(MayaQWidgetDockableMixin, qsingletonwindow.QSingletonWindow
         :rtype: None
         """
 
-        pass
+        self.selectObjectsInSelectedLayers()
 
     @QtCore.Slot(bool)
     def on_removeSelectedObjectsFromSelectedLayersAction_triggered(self, checked=False):
